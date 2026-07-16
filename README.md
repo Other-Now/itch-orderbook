@@ -137,59 +137,60 @@ Replayed a real Nasdaq TotalView-ITCH 5.0 feed (2019-01-30, 214 MiB,
 
 ## Benchmarks
 
-_Machine: Apple M2 (MacBook Air, **fanless**), Apple Clang 14, `-O3`._
+Steady-state add + delete churn (the realistic regime, ~50 levels/side), measured
+on two machines. **The winner depends on the platform**, so both columns are shown
+rather than one headline number:
 
-**Read this first.** The M2 Air throttles under sustained load, so whole-file
-wall-clock replay swings ~2× with thermal state and is only a rough sanity
-check. The trustworthy comparison is the Google Benchmark steady-state
-micro-benchmark below — 5 repetitions, **stddev < 1%**.
-
-Steady-state add + delete churn (the realistic regime, ~50 levels/side):
-
-| Book model | ns / op | vs map | uniquely answers |
+| Book model | Apple M2 (arm64) | AMD EPYC 9654 (x86) | uniquely answers |
 | --- | --- | --- | --- |
-| **MBP, flat vector** | **58.4** | 1.38× faster | — |
-| MBO, price-time FIFO | 70.9 | 1.13× faster | queue position, fills |
-| MBP, `std::map` | 80.3 | baseline | — |
+| MBP, `std::map` | 80.3 ns (1.00×) | 91.5 ns (1.00×) | — |
+| MBP, flat vector | **58.4 ns (1.38× faster)** | 97.1 ns (0.94×, *slower*) | — |
+| MBO, price-time FIFO | 70.9 ns (1.13× faster) | **76.9 ns (1.19× faster)** | queue position, fills |
 
-Select at the CLI with `./build/itch_replay [--flat | --mbo] <file>`. All three
-agree on BBO and size-at-price on real data (0 mismatches, 0 unknown refs).
+_M2: MacBook Air (fanless), Apple Clang 14. EPYC: g++ 11.5, glibc 2.35. Both `-O3`;
+steady-state churn, median of repeated runs, cv < 1%._ The M2's fanless throttling
+makes whole-file wall-clock replay swing ~2×, so only the micro-benchmark above is
+trustworthy there. Select the model at the CLI with
+`./build/itch_replay [--flat | --mbo] <file>`; all three agree on BBO and
+size-at-price on real data (0 mismatches, 0 unknown refs).
 
-> **The tradeoffs:**
+> **Reading the table: the flat-vector win is platform-dependent; MBO's is not.**
 >
-> *Flat vs map (MBP).* The flat vector wins ~1.38× because a real book keeps only
-> tens of active levels per side, so contiguous storage is cache-friendly and
-> `best()` is a single load. On synthetic books with ~20,000 sub-penny levels the
-> flat vector is ~4× *slower* — its O(levels) insert loses to the tree once depth
-> is large. The win is conditional on realistic depth.
+> Each churn op either allocates+frees a red-black-tree node (map) or `memmove`s a
+> contiguous vector (flat), so which wins is decided by the platform's allocator,
+> not by the data structure. An isolation benchmark on the EPYC box — plain
+> `std::map` vs a pool-backed `std::pmr::map` vs the flat vector, same tree and
+> comparisons, only the node allocator differing — makes the mechanism concrete:
 >
-> *MBO vs MBP.* The full order book is **faster than the `std::map` baseline**
-> (70.9 vs 80.3 ns) *despite* maintaining a per-order FIFO, because its slab pool
-> allocator removes the per-node heap traffic that dominates the `std::map`
-> version. Relative to the fastest aggregate book (flat) it costs ~1.21× — a
-> small price for queue-position / fill-simulation capability that aggregation
-> structurally cannot provide.
+> - *Level churn (alloc-heavy):* flat 26.8 ns, map 30.4 ns, **`pmr::map` 38.2 ns**.
+>   Pooling the map's nodes made it *slower*, not faster: glibc's per-thread tcache
+>   already services fixed-size node churn about as cheaply as a bare free-list, so
+>   a generic pool resource only adds bookkeeping. Allocation was never the map's
+>   bottleneck on glibc — which is why the M2's flat-vector win doesn't reproduce.
+> - *Level touch (no alloc):* map 6.5 ns, flat 9.6 ns. Remove allocation and the
+>   red-black tree is actually *faster* than the vector at ~50 levels.
 >
-> *A measurement-rigor note (worth saying out loud).* My first single-shot runs
-> reported a 2.1× flat speedup and an MBO that looked ~1.8× slower — both partly
-> thermal-throttling artifacts on this fanless machine. Measuring with
-> repetitions and low variance gave the real, smaller, steady-state gaps above.
-> Repeat-and-report-variance isn't optional on thermally-constrained hardware.
+> So on the M2 (libmalloc, pricier node alloc/free) the flat vector's `memmove`
+> wins by 1.38×; on x86/glibc the two roughly tie and flat lands ~6% behind. The
+> flat vector is **not** universally faster — its advantage is an allocator
+> artifact. On sub-penny synthetic books with ~20,000 levels it is ~4× *slower*
+> on both, as its O(levels) insert loses to the tree once depth is large.
 >
-> Apple Silicon has 128-byte cache lines and no RDTSC; timing uses Google
-> Benchmark's CPU timer. A cross-architecture x86 run (RDTSC cycle counts, on a
-> thermally stable box) is planned.
+> The **MBO** book is the robust result: its slab pool removes per-order allocation
+> from the hot path independent of the system allocator, so it is fastest on *both*
+> machines (1.13× M2, 1.19× x86) — the price of that being queue-position and
+> fill-simulation that an aggregate book structurally cannot answer.
 
 ## Status
 
 Done: parse + three book models (MBP map, MBP flat, MBO price-time FIFO with a
 pool allocator and `queue_position`), Catch2 unit tests, Google Benchmark suite,
-the flat-vector optimization (~1.38× in stable benchmarks) and the measured
-MBP↔MBO tradeoff, ASan/UBSan-clean, and GitHub Actions CI.
+the measured MBP↔MBO tradeoff and the cross-platform (M2 / x86) allocator study
+showing the flat-vector win is allocator-dependent while MBO's holds on both,
+ASan/UBSan-clean, and GitHub Actions CI.
 
 Roadmap: NOII/cross message handling, A/B-line arbitration and TCP retransmit
-recovery for the live path, a lock-free parse/book hand-off, and an x86
-cross-architecture (RDTSC cycle-count) comparison.
+recovery for the live path, and a lock-free parse/book hand-off.
 
 ## License
 
