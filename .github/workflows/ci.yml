@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - { cc: gcc-13, cxx: g++-13 }
+          - { cc: clang, cxx: clang++ }
+    env:
+      CC: ${{ matrix.compiler.cc }}
+      CXX: ${{ matrix.compiler.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake catch2 libbenchmark-dev
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake catch2 libbenchmark-dev
+
+      - name: Configure (ASan + UBSan)
+        run: cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DITCH_ASAN=ON
+
+      - name: Build
+        run: cmake --build build-asan -j
+
+      - name: Test under sanitizers
+        run: ctest --test-dir build-asan --output-on-failure

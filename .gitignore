@@ -1,0 +1,10 @@
+/build*/
+*.gz
+.DS_Store
+compile_commands.json
+
+# Feed data is large and/or licensed, so keep it out of git -- except the small
+# synthetic sample, committed so the repo runs on clone. (Ignore the directory
+# contents, not the directory itself, so the negation below can re-include.)
+/data/*
+!/data/synthetic.NASDAQ_ITCH50
