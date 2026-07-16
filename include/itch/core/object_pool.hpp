@@ -15,6 +15,9 @@ namespace itch {
 // lifetime, so the order index and FIFO nodes can hold raw pointers into it.
 template <class T>
 class ObjectPool {
+    static_assert(sizeof(T) >= sizeof(void*), "slot must hold a free-list link");
+    static_assert(alignof(T) >= alignof(void*), "slot must be aligned for the link");
+
 public:
     ObjectPool() = default;
     ObjectPool(const ObjectPool&) = delete;

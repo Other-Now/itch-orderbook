@@ -19,6 +19,12 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 option(ITCH_BUILD_TESTS "Build unit tests (needs Catch2)" ON)
 option(ITCH_BUILD_BENCH "Build benchmarks (needs Google Benchmark)" ON)
 option(ITCH_ASAN "Build with Address/UB sanitizers" OFF)
+option(ITCH_WERROR "Treat warnings as errors" OFF)
+
+add_compile_options(-Wall -Wextra -Wpedantic)
+if(ITCH_WERROR)
+    add_compile_options(-Werror)
+endif()
 
 # Header-only core library.
 add_library(itch INTERFACE)

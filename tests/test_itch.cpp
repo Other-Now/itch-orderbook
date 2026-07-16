@@ -193,6 +193,22 @@ TEST_CASE("parser: framed stream dispatches to book") {
     CHECK(set.book(3)->best_ask().value() == 1000100);
 }
 
+TEST_CASE("parser: too-short frame is counted but not applied") {
+    // An 'A' frame declaring 10 bytes (< 36 canonical). Applying it would read
+    // its accessors past the frame; it must be counted and skipped instead.
+    std::vector<unsigned char> msg(10, 0);
+    msg[0] = 'A';
+    std::vector<unsigned char> stream;
+    frame(stream, msg);
+
+    OrderBookSet set;
+    ParseStats st = parse(stream.data(), stream.size(), set);
+    CHECK(st.msg.total_messages == 1);
+    CHECK(st.msg.length_mismatches == 1);
+    CHECK(set.stats().adds == 0);
+    CHECK(set.live_orders() == 0);
+}
+
 TEST_CASE("moldudp64: same book as file replay, over packets") {
     // Two Add messages, delivered as one MoldUDP64 packet (seq starts at 1).
     auto a1 = make_add(3, 100, 'B', 500, 999900);

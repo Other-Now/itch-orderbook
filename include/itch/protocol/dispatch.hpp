@@ -26,7 +26,10 @@ inline void dispatch_message(const unsigned char* msg, std::uint16_t len, BookSe
     const int canonical = message_length(type);
     if (canonical > 0 && canonical != static_cast<int>(len)) ++stats.length_mismatches;
 
-    switch (type) {
+    // Too-short frame: applying it would read past the frame. Count only.
+    const bool short_frame = canonical > 0 && static_cast<int>(len) < canonical;
+
+    if (!short_frame) switch (type) {
         case 'A':
         case 'F':  // Add w/ MPID: identical prefix, extra attribution ignored
             book.add_order(AddOrder{msg});
