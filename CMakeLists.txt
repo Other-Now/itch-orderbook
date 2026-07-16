@@ -49,6 +49,11 @@ target_link_libraries(itch_gen PRIVATE itch)
 add_executable(itch_live src/live.cpp)
 target_link_libraries(itch_live PRIVATE itch)
 
+# Allocator-isolation benchmark behind the README's cross-platform study. Uses a
+# built-in timing harness (no Google Benchmark), so it always builds.
+add_executable(itch_bench_levels bench/bench_levels.cpp)
+target_link_libraries(itch_bench_levels PRIVATE itch)
+
 # --- Optional: unit tests -----------------------------------------------------
 if(ITCH_BUILD_TESTS)
     find_package(Catch2 3 QUIET)

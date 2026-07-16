@@ -181,6 +181,9 @@ size-at-price on real data (0 mismatches, 0 unknown refs).
 > machines (1.13× M2, 1.19× x86) — the price of that being queue-position and
 > fill-simulation that an aggregate book structurally cannot answer.
 
+Reproduce the allocator study on your own machine with `./build/itch_bench_levels`
+(no dependencies — built-in timing harness).
+
 ## Status
 
 Done: parse + three book models (MBP map, MBP flat, MBO price-time FIFO with a
