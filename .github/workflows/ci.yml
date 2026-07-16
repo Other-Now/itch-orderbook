@@ -34,6 +34,12 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
+      - name: Smoke-run replay + allocator benchmark (x86 runner)
+        run: |
+          ./build/itch_gen 200000 data/ci.NASDAQ_ITCH50
+          ./build/itch_replay --mbo data/ci.NASDAQ_ITCH50
+          ./build/itch_bench_levels
+
   sanitizers:
     runs-on: ubuntu-latest
     steps:
