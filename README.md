@@ -141,59 +141,47 @@ it, and asserts both counts are zero (a partial download validates its prefix).
 ## Benchmarks
 
 Steady-state add + delete churn (the realistic regime, ~50 levels/side), measured
-on two machines. **The winner depends on the platform**, so both columns are shown
-rather than one headline number:
+on two machines with the **same** dependency-free harness (`itch_bench_churn`) so
+the columns are directly comparable. **The MBP winner depends on the platform**, so
+both are shown rather than one headline number:
 
 | Book model | Apple M2 (arm64) | AMD EPYC 9654 (x86) | uniquely answers |
 | --- | --- | --- | --- |
-| MBP, `std::map` | 80.3 ns (1.00×) | 91.5 ns (1.00×) | — |
-| MBP, flat vector | **58.4 ns (1.38× faster)** | 97.1 ns (0.94×, *slower*) | — |
-| MBO, price-time FIFO | 70.9 ns (1.13× faster) | **76.9 ns (1.19× faster)** | queue position, fills |
+| MBP, `std::map` | 80.2 ns (1.00×) | 91.5 ns (1.00×) | — |
+| MBP, flat vector | **58.4 ns (1.37× faster)** | 97.1 ns (0.94×, *slower*) | — |
+| MBO, price-time FIFO | 69.9 ns (1.15× faster) | **76.9 ns (1.19× faster)** | queue position, fills |
 
-_M2: MacBook Air (fanless), Apple Clang 14. EPYC: g++ 11.5, glibc 2.35. Both `-O3`;
-steady-state churn, median of repeated runs, cv < 1%._ The M2's fanless throttling
-makes whole-file wall-clock replay swing ~2×, so only the micro-benchmark above is
-trustworthy there. Select the model at the CLI with
-`./build/itch_replay [--flat | --mbo] <file>`; all three agree on BBO and
+_M2: MacBook Air (fanless), Apple Clang. EPYC: g++ 11.5, glibc 2.35. Both `-O3`,
+median of repeated runs (cv < 1%)._ The M2 numbers reproduce an independent Google
+Benchmark run (80.3 / 58.4 / 70.9 ns), cross-checking the harness. Reproduce either
+column with `./build/itch_bench_churn` (no dependencies). Select the model at the
+CLI with `./build/itch_replay [--flat | --mbo] <file>`; all three agree on BBO and
 size-at-price on real data (0 mismatches, 0 unknown refs).
 
-> **Reading the table: the flat-vector win is platform-dependent; MBO's is not.**
+> **Two honest takeaways:**
 >
-> Each churn op either allocates+frees a red-black-tree node (map) or `memmove`s a
-> contiguous vector (flat), so which wins is decided by the platform's allocator,
-> not by the data structure. An isolation benchmark on the EPYC box — plain
-> `std::map` vs a pool-backed `std::pmr::map` vs the flat vector, same tree and
-> comparisons, only the node allocator differing — makes the mechanism concrete:
+> *The flat-vector win is platform-dependent.* It beats `std::map` by 1.37× on the
+> M2 but is ~6% *slower* on x86/glibc — the ordering inverts across machines, so it
+> is **not** a universal optimization. The two structures differ only in their level
+> container (a red-black tree that allocates a node per new level vs a contiguous
+> vector that `memmove`s), and which is cheaper depends on the platform's allocator
+> and cache behaviour; pinning the exact cause would need perf-counter profiling and
+> is not claimed here. Separately, on pathological ~20,000-level books the flat
+> vector is several times slower on both machines, as its O(levels) insert loses to
+> the tree once depth is large.
 >
-> - *Level churn (alloc-heavy):* flat 26.8 ns, map 30.4 ns, **`pmr::map` 38.2 ns**.
->   Pooling the map's nodes made it *slower*, not faster: glibc's per-thread tcache
->   already services fixed-size node churn about as cheaply as a bare free-list, so
->   a generic pool resource only adds bookkeeping. Allocation was never the map's
->   bottleneck on glibc — which is why the M2's flat-vector win doesn't reproduce.
-> - *Level touch (no alloc):* map 6.5 ns, flat 9.6 ns. Remove allocation and the
->   red-black tree is actually *faster* than the vector at ~50 levels.
->
-> So on the M2 (libmalloc, pricier node alloc/free) the flat vector's `memmove`
-> wins by 1.38×; on x86/glibc the two roughly tie and flat lands ~6% behind. The
-> flat vector is **not** universally faster — its advantage is an allocator
-> artifact. On sub-penny synthetic books with ~20,000 levels it is ~4× *slower*
-> on both, as its O(levels) insert loses to the tree once depth is large.
->
-> The **MBO** book is the robust result: its slab pool removes per-order allocation
-> from the hot path independent of the system allocator, so it is fastest on *both*
-> machines (1.13× M2, 1.19× x86) — the price of that being queue-position and
+> *MBO is the robust result.* Its slab pool removes per-order allocation from the
+> hot path independent of the system allocator, so it is fastest on *both* machines
+> (1.15× M2, 1.19× x86) — the price of that being the queue-position and
 > fill-simulation that an aggregate book structurally cannot answer.
-
-Reproduce the allocator study on your own machine with `./build/itch_bench_levels`
-(no dependencies — built-in timing harness).
 
 ## Status
 
 Done: parse + three book models (MBP map, MBP flat, MBO price-time FIFO with a
 pool allocator and `queue_position`), Catch2 unit tests, Google Benchmark suite,
-the measured MBP↔MBO tradeoff and the cross-platform (M2 / x86) allocator study
-showing the flat-vector win is allocator-dependent while MBO's holds on both,
-ASan/UBSan-clean, and GitHub Actions CI.
+the measured MBP↔MBO tradeoff and a same-harness cross-platform (M2 / x86)
+comparison showing the flat-vector win is platform-dependent while MBO's holds on
+both, ASan/UBSan-clean, and GitHub Actions CI.
 
 Roadmap: NOII/cross message handling, A/B-line arbitration and TCP retransmit
 recovery for the live path, and a lock-free parse/book hand-off.
