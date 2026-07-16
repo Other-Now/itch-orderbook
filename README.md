@@ -135,6 +135,9 @@ Replayed a real Nasdaq TotalView-ITCH 5.0 feed (2019-01-30, 214 MiB,
   to a live prior order, i.e. the order-lifetime and cumulative-share semantics
   are correct across millions of real events.
 
+Reproduce it end-to-end with `./tools/validate.sh` — it fetches that day, replays
+it, and asserts both counts are zero (a partial download validates its prefix).
+
 ## Benchmarks
 
 Steady-state add + delete churn (the realistic regime, ~50 levels/side), measured

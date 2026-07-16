@@ -4,7 +4,7 @@
 # Nasdaq publishes sample daily binary files on its EMI FTP server. Files are
 # named like 01302019.NASDAQ_ITCH50.gz (MMDDYYYY). We grab one, gunzip it, and
 # drop it in ./data. If the FTP is unreachable, Databento hosts equivalent
-# sample data (see PLAN.md).
+# sample data (see the fallback message below).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
